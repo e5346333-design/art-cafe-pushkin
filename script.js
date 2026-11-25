@@ -187,9 +187,6 @@
       var btn = e.target.closest('[data-add]');
       if (!btn) return;
       addToCart(btn.dataset.add);
-      btn.classList.add('is-added');
-      btn.textContent = '✓';
-      setTimeout(function () { btn.classList.remove('is-added'); btn.textContent = '+'; }, 1100);
     });
   }
 
@@ -219,7 +216,8 @@
     cart[id] = Math.min(99, (cart[id] || 0) + 1);
     saveCart();
     syncCartUI();
-    toast('«' + ALL_DISHES[id].name + '» в корзине');
+    bumpBadge();
+    toast('«' + ALL_DISHES[id].name + '» в корзине', { label: 'Открыть', onClick: openCart });
   }
   function changeQty(id, delta) {
     if (!cart[id]) return;
@@ -228,15 +226,36 @@
     saveCart();
     syncCartUI();
   }
+
+  var clearedCart = null;
   function clearCart() {
+    if (!cartCount()) return;
+    clearedCart = JSON.parse(JSON.stringify(cart));
     cart = {};
     saveCart();
     syncCartUI();
+    toast('Корзина очищена', { label: 'Вернуть', onClick: restoreCart });
+  }
+  function restoreCart() {
+    if (!clearedCart) return;
+    cart = clearedCart;
+    clearedCart = null;
+    saveCart();
+    syncCartUI();
+    toast('Заказ вернулся в корзину');
   }
 
   var cartBody = $('#cartBody');
   var cartFoot = $('#cartFoot');
   var cartBadge = $('#cartBadge');
+  var cartClearBtn = $('#cartClear');
+
+  function bumpBadge() {
+    if (!cartBadge) return;
+    cartBadge.classList.remove('is-bumped');
+    void cartBadge.offsetWidth;
+    cartBadge.classList.add('is-bumped');
+  }
 
   function syncCartUI() {
     var count = cartCount();
@@ -244,6 +263,7 @@
       cartBadge.textContent = count;
       cartBadge.hidden = count === 0;
     }
+    if (cartClearBtn) cartClearBtn.hidden = count === 0;
 
     if (cartBody) {
       var ids = Object.keys(cart);
@@ -295,6 +315,10 @@
     });
   }
 
+  if (cartClearBtn) {
+    cartClearBtn.addEventListener('click', clearCart);
+  }
+
 
   /* ---------- панели ---------- */
   var cartDrawer = $('#cartDrawer');
@@ -315,7 +339,11 @@
   }
 
   var cartOpenBtn = $('#cartOpen');
-  if (cartOpenBtn) cartOpenBtn.addEventListener('click', function () { syncCartUI(); openPanel(cartDrawer); });
+  function openCart() {
+    syncCartUI();
+    openPanel(cartDrawer);
+  }
+  if (cartOpenBtn) cartOpenBtn.addEventListener('click', openCart);
 
   document.addEventListener('click', function (e) {
     if (e.target.closest('[data-close-cart]')) closePanel(cartDrawer);
@@ -484,18 +512,40 @@
   /* ---------- тост ---------- */
   var toastEl;
   var toastTimer;
-  function toast(msg) {
+  var toastAction = null;
+  function toast(msg, action) {
     if (!toastEl) {
       toastEl = document.createElement('div');
       toastEl.className = 'toast';
       toastEl.setAttribute('role', 'status');
       toastEl.setAttribute('aria-live', 'polite');
+      toastEl.innerHTML = '<span class="toast__text"></span>';
       document.body.appendChild(toastEl);
     }
-    toastEl.textContent = msg;
+    $('.toast__text', toastEl).textContent = msg;
+
+    if (toastAction) {
+      toastEl.removeChild(toastAction);
+      toastAction = null;
+    }
+    if (action && action.label) {
+      toastAction = document.createElement('button');
+      toastAction.type = 'button';
+      toastAction.className = 'toast__action';
+      toastAction.textContent = action.label;
+      toastAction.addEventListener('click', function () {
+        hideToast();
+        action.onClick();
+      });
+      toastEl.appendChild(toastAction);
+    }
+
     toastEl.classList.add('is-visible');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.classList.remove('is-visible'); }, 2400);
+    toastTimer = setTimeout(hideToast, action && action.label ? 5200 : 2400);
+  }
+  function hideToast() {
+    if (toastEl) toastEl.classList.remove('is-visible');
   }
 
   /* ---------- инициализация ---------- */
